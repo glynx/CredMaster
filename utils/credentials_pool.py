@@ -319,6 +319,7 @@ class CredentialsPool:
                 pass
             else:
                 self.logger_entry.debug(f"EXCEPTION: {ex}")
+
     def get_creds(self):
         self.get_creds_lock.acquire()
         try:
@@ -329,7 +330,7 @@ class CredentialsPool:
 
                 while not candidate_found and len(self.pool.keys()) > 0 and not self.cancelled:
                     for d in list(self.ready["domains"]):
-                        # robust gegen fehlende Keys
+                        # handle missing keys safely
                         ready_usernames = list(self.ready["users"].get(d, []))
                         ready_users = [self.pool[u] for u in ready_usernames if u in self.pool]
                         if ready_users:
@@ -339,7 +340,7 @@ class CredentialsPool:
                                 candidate = max(candidate, self.pool.get(username, candidate))
                             username = candidate.username
                     if not candidate_found and not self.cancelled:
-                        # Lock kurz freigeben, damit andere Threads nicht blockieren
+                        # release lock while sleeping to not block other threads
                         self.get_creds_lock.release()
                         try:
                             time.sleep(5)
@@ -347,7 +348,7 @@ class CredentialsPool:
                             self.get_creds_lock.acquire()
 
                 if self.cancelled:
-                    return None  # finally gibt den Lock frei
+                    return None  # lock will be released in finally
 
                 if username in self.pool and not self.pool[username].passwords.empty():
                     user_found = True
@@ -356,7 +357,7 @@ class CredentialsPool:
 
                 d = CredentialsPool.get_user_domain(username)
 
-                # defensiv entfernen
+                # safe remove from list/dict
                 if d in self.ready["users"]:
                     try:
                         self.ready["users"][d].remove(username)
@@ -370,7 +371,7 @@ class CredentialsPool:
                         pass
 
             if self.cancelled or (not user_found and len(self.pool.keys()) == 0):
-                return None  # finally gibt frei
+                return None  # lock will be released in finally
 
             password = self.pool[username].get_next_password()
             if self.pool[username].passwords.empty():
@@ -380,12 +381,11 @@ class CredentialsPool:
             self.attempts_count += 1
             return {"username": username, "password": password, "useragent": random.choice(list(self.useragents))}
         finally:
-            # stellt sicher, dass der Lock IMMER freigegeben wird
+            # ensure lock is always released
             try:
                 self.get_creds_lock.release()
             except RuntimeError:
                 pass
-
 
     def trim_user(self, username):
         self.logger_entry.debug(f"Trimming {username}")
