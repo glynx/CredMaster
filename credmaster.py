@@ -298,10 +298,14 @@ class CredMaster(object):
 		##
 		pluginargs['thread_count'] = self.thread_count
 
-		self.start_time = datetime.datetime.utcnow()
+		self.start_time = datetime.datetime.now(datetime.timezone.utc)
 		self.console_logger.info(f"Execution started at: {self.start_time}")
 
 		# Check with plugin to make sure it has the data that it needs
+		if self.plugin is None:
+			self.console_logger.error("Please provide plugin")
+			sys.exit()
+
 		validator = importlib.import_module(f"plugins.{self.plugin}")
 		if getattr(validator,"validate",None) is not None:
 			valid, errormsg, pluginargs = validator.validate(pluginargs, self.args)
@@ -461,7 +465,7 @@ class CredMaster(object):
 				termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_term)
 
 		# Capture duration
-		self.end_time = datetime.datetime.utcnow()
+		self.end_time = datetime.datetime.now(datetime.timezone.utc)
 		self.time_lapse = (self.end_time-self.start_time).total_seconds()
 
 		# Print stats
@@ -474,7 +478,10 @@ class CredMaster(object):
 			self.console_logger.warning("Thread count over maximum, reducing to 15")
 			self.thread_count = len(self.regions)
 
-		self.console_logger.info(f"Creating {self.thread_count} API Gateways for {url}")
+		if not self.no_fireprox:
+			self.console_logger.info(f"Creating {self.thread_count} API Gateways for {url}")
+		else:
+			self.console_logger.info(f"Fireprox is disabled, not creating any APIs")
 
 		self.apis = []
 
@@ -693,51 +700,11 @@ class CredMaster(object):
 		if filename:
 			return [line.strip() for line in open(filename, 'r')]
 
-
 	def signal_success(self, username, password):
 		for x in self.results:
 			if x["username"] == username and x["password"] == password:
 				return
 		self.results.append({"username": username, "password": password})
-
-	def log_entry(self, entry):
-
-		self.lock.acquire()
-
-		ts = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-		print(f"[{ts}] {entry}")
-
-		if self.outfile is not None:
-			with open(self.outfile + "-credmaster.txt", 'a+', encoding='utf-8') as file:
-				file.write(f"[{ts}] {entry}")
-				file.write("\n")
-				file.close()
-
-		self.lock.release()
-
-
-	def log_valid(self, username, plugin):
-
-		self.lock_userenum.acquire()
-
-		with open("credmaster-validusers.txt", 'a+', encoding='utf-8') as file:
-			file.write(username)
-			file.write('\n')
-			file.close()
-
-		self.lock_userenum.release()
-
-
-	def log_success(self, username, password):
-
-		self.lock_success.acquire()
-
-		with open("credmaster-success.txt", 'a+', encoding='utf-8') as file:
-			file.write(username + ":" + password)
-			file.write('\n')
-			file.close()
-
-		self.lock_success.release()
 
 	def keyboard_handler(self):
 		self.old_term = termios.tcgetattr(sys.stdin)
@@ -751,7 +718,7 @@ class CredMaster(object):
 			except Exception as e:
 				pass
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_term)
-		
+
 
 if __name__ == '__main__':
 
