@@ -644,7 +644,6 @@ class CredMaster(object):
 			self.console_logger.error("Error: Failed to import plugin with exception")
 			self.console_logger.error(f"Error: {ex}")
 			sys.exit()
-
 		while self.creds_pool.creds_left() and not self.cancelled:
 			try:
 				cred = self.creds_pool.get_creds()

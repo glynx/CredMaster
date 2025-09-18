@@ -319,65 +319,73 @@ class CredentialsPool:
                 pass
             else:
                 self.logger_entry.debug(f"EXCEPTION: {ex}")
-
     def get_creds(self):
         self.get_creds_lock.acquire()
-        user_found = False
-        while not user_found and len(self.pool.keys()) > 0 and not self.cancelled:
-            username = ""
-            candidate_found = False
-            while not candidate_found and len(self.pool.keys()) > 0 and not self.cancelled:
-                for d in list(self.ready["domains"]):
-                    ready_users = [self.pool[u] for u in self.ready["users"][d]]
-                    if len(ready_users) > 0:
-                        candidate_found = True
-                        # get the user with the most passwords left to try
-                        candidate = max(ready_users)
-                        if username != "":
-                            candidate = max(candidate, self.pool[username])
-                        username = candidate.username
-                if not candidate_found and not self.cancelled:
-                    # self.logger_entry.debug("No candidate, sleeping")
-                    # self.logger_entry.debug(self.ready)
-                    time.sleep(5)
-            if self.cancelled:
-                try:
-                    # self.logger_entry.debug("Releasing lock")
-                    self.get_creds_lock.release()
-                except Exception as ex:
-                    if 'unlocked lock' in str(ex):
+        try:
+            user_found = False
+            while not user_found and len(self.pool.keys()) > 0 and not self.cancelled:
+                username = ""
+                candidate_found = False
+
+                while not candidate_found and len(self.pool.keys()) > 0 and not self.cancelled:
+                    for d in list(self.ready["domains"]):
+                        # robust gegen fehlende Keys
+                        ready_usernames = list(self.ready["users"].get(d, []))
+                        ready_users = [self.pool[u] for u in ready_usernames if u in self.pool]
+                        if ready_users:
+                            candidate_found = True
+                            candidate = max(ready_users)
+                            if username:
+                                candidate = max(candidate, self.pool.get(username, candidate))
+                            username = candidate.username
+                    if not candidate_found and not self.cancelled:
+                        # Lock kurz freigeben, damit andere Threads nicht blockieren
+                        self.get_creds_lock.release()
+                        try:
+                            time.sleep(5)
+                        finally:
+                            self.get_creds_lock.acquire()
+
+                if self.cancelled:
+                    return None  # finally gibt den Lock frei
+
+                if username in self.pool and not self.pool[username].passwords.empty():
+                    user_found = True
+                elif username in self.pool:
+                    del self.pool[username]
+
+                d = CredentialsPool.get_user_domain(username)
+
+                # defensiv entfernen
+                if d in self.ready["users"]:
+                    try:
+                        self.ready["users"][d].remove(username)
+                    except ValueError:
                         pass
-                    else:
-                        self.logger_entry.debug(f"EXCEPTION3: {ex}")
-                return None
-            if username in self.pool.keys() and not self.pool[username].passwords.empty():
-                user_found = True
-            elif username in self.pool.keys():
+
+                if user_found:
+                    try:
+                        self.ready["domains"].remove(d)
+                    except (ValueError, KeyError, AttributeError):
+                        pass
+
+            if self.cancelled or (not user_found and len(self.pool.keys()) == 0):
+                return None  # finally gibt frei
+
+            password = self.pool[username].get_next_password()
+            if self.pool[username].passwords.empty():
                 del self.pool[username]
-            d = CredentialsPool.get_user_domain(username)
-            self.ready["users"][d].remove(username)
-            if user_found:
-                self.ready["domains"].remove(CredentialsPool.get_user_domain(username))
 
-        if self.cancelled or (not user_found and len(self.pool.keys()) == 0):
-            # print("Releasing creds lock")
+            self.apply_delays(username)
+            self.attempts_count += 1
+            return {"username": username, "password": password, "useragent": random.choice(list(self.useragents))}
+        finally:
+            # stellt sicher, dass der Lock IMMER freigegeben wird
             try:
-                # self.logger_entry.debug("Releasing lock")
                 self.get_creds_lock.release()
-            except Exception as ex:
-                if 'unlocked lock' in str(ex):
-                    pass
-                else:
-                    self.logger_entry.debug(f"EXCEPTION2: {ex}")
-            return None
+            except RuntimeError:
+                pass
 
-        password = self.pool[username].get_next_password()
-        if self.pool[username].passwords.empty():
-            del self.pool[username]
-
-        self.apply_delays(username)
-        self.attempts_count += 1
-        return {"username": username, "password": password, "useragent": random.choice(list(self.useragents))}
 
     def trim_user(self, username):
         self.logger_entry.debug(f"Trimming {username}")
