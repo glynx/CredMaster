@@ -538,10 +538,17 @@ class CredMaster(object):
 		if self.end_time and not start:
 			self.console_logger.info(f"End Time: {self.end_time}")
 			self.console_logger.info(f"Total Execution: {self.time_lapse} seconds")
-			self.console_logger.info(f"Valid credentials identified: {len(self.results)}")
+
+			if self.userenum:
+				self.console_logger.info(f"Valid users identified: {len(self.results)}")
+			else:
+				self.console_logger.info(f"Valid credentials identified: {len(self.results)}")
 
 			for cred in self.results:
-				self.console_logger.info(f"VALID - {cred['username']}:{cred['password']}")
+				if self.userenum:
+					self.console_logger.info(f"VALID - {cred['username']}")
+				else:
+					self.console_logger.info(f"VALID - {cred['username']}:{cred['password']}")
 
 
 	def display_progress(self):
@@ -650,39 +657,40 @@ class CredMaster(object):
 				if cred is not None and not self.cancelled:
 					self.console_logger.debug(f"[Spray Thread] Trying {cred['username']}:{cred['password']}")
 					response = plugin_authentiate(api_dict["proxy_url"], cred["username"], cred["password"], cred["useragent"], pluginargs)
+					result = (response.get("result") or "").lower()
 
 					# if "debug" in response.keys():
 					# 	print(response["debug"])
 
-					self.cache.add_tentative(cred["username"], cred["password"], Cache.TRANSLATE[response["result"].lower()], response["output"], self.plugin)
+					self.cache.add_tentative(cred["username"], cred["password"], Cache.TRANSLATE[result], response["output"], self.plugin)
 
 					if response["error"]:
-						self.console_logger.error(f"ERROR: {api_key}: {cred['username']} - {response['output']}")
+						self.console_logger.error(f"ERROR: {api_key}: {cred['username']} - {repr(response['output'])}")
 
-					if response["result"].lower() == "inexistant" and self.trim:
+					if result == "inexistant" and self.trim:
 						self.creds_pool.trim_user(cred["username"])
 
-					if response["result"].lower() == "success" and ("userenum" not in pluginargs):
+					if result == "success" and ("userenum" not in pluginargs):
 						if self.trim:
 							self.creds_pool.trim_user(cred["username"])
 						self.results.append( {"username" : cred["username"], "password" : cred["password"]} )
 						notify.notify_success(cred["username"], cred["password"], self.notify_obj, self.proxy_notify)
 						self.success_logger.info(f'{cred["username"]}:{cred["password"]}')
 
-					if response["valid_user"] or response["result"] == "success":
+					if response["valid_user"] or result == "success":
 						self.valid_logger.info(f'{cred["username"]}')
 					if self.color:
 
-						if response["result"].lower() == "success":
+						if result == "success":
 							self.console_logger.info(utils.prGreen(f"{api_key}: {response['output']}"))
 
-						elif response["result"].lower() == "potential":
+						elif result == "potential":
 							self.console_logger.info(utils.prYellow(f"{api_key}: {response['output']}"))
 
-						elif response["result"].lower() == "failure":
+						elif result == "failure":
 							self.console_logger.info(utils.prRed(f"{api_key}: {response['output']}"))
 
-						elif response["result"].lower() == "inexistant":
+						elif result == "inexistant":
 							self.console_logger.info(utils.prRed(f"{api_key}: User {cred['username']} does not exist ({response['output']})"))
 
 					else:
