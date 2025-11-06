@@ -35,6 +35,7 @@ For detection tips, see the blogpost and detection section.
 * Easily add new plugins
 * Colourised output
 * Notification systems for Keybase, Slack, Discord, Teams & Pushover
+* Notification filters to restrict alerts to specific events (e.g. `--notify_on success`)
 * [WeekdayWarrior](https://github.com/knavesec/CredMaster/wiki/Weekday-Warrior) setting for timed spraying and SOC evasion
 
 ![general](https://raw.githubusercontent.com/whynotsecurity/whynotsecurity.github.io/master/assests/images/credmaster-screenshots/credmaster-default.png)

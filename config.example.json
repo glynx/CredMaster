@@ -39,6 +39,7 @@
   "keybase_webhook": null,
   "operator_id" : null,
   "exclude_password" : false,
+  "notify_on": "success,update",
 
   "no_fireprox" : true,
   "access_key" : "AKIA[...]",

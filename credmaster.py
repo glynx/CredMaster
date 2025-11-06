@@ -11,6 +11,8 @@ import logging
 
 class CredMaster(object):
 
+	NOTIFY_EVENTS = {"success", "update"}
+
 	def __init__(self, args, pargs):
 
 		self.credentials = { "accounts" : [] }
@@ -197,6 +199,7 @@ class CredMaster(object):
 			"operator_id" : args.operator_id or config_dict.get("operator_id"),
 			"exclude_password" : args.exclude_password or config_dict.get("exclude_password")
 		}
+		self.notify_events = self._parse_notify_events(args.notify_on or config_dict.get("notify_on"))
 
 		self.no_fireprox = args.no_fireprox or config_dict.get("no_fireprox")
 		self.access_key = args.access_key or config_dict.get("access_key")
@@ -207,6 +210,33 @@ class CredMaster(object):
 		self.api_prefix = args.api_prefix or config_dict.get("api_prefix")
 		if self.api_prefix is None:
 			self.api_prefix = "fireprox"
+
+	def _parse_notify_events(self, raw_events):
+		if raw_events is None:
+			return set(self.NOTIFY_EVENTS)
+
+		if isinstance(raw_events, str):
+			tokens = [token.strip().lower() for token in raw_events.split(",")]
+		elif isinstance(raw_events, (list, tuple, set)):
+			tokens = [str(token).strip().lower() for token in raw_events]
+		else:
+			tokens = [str(raw_events).strip().lower()]
+
+		tokens = [token for token in tokens if token]
+
+		if not tokens:
+			self.console_logger.error("notify_on requires at least one value (success, update) or 'none' to disable notifications.")
+			sys.exit()
+
+		if len(tokens) == 1 and tokens[0] == "none":
+			return set()
+
+		invalid = set(tokens) - self.NOTIFY_EVENTS
+		if invalid:
+			self.console_logger.error(f"Invalid notify_on value(s): {', '.join(sorted(invalid))}. Supported values: {', '.join(sorted(self.NOTIFY_EVENTS))}")
+			sys.exit()
+
+		return set(tokens)
 
 
 	def do_input_error_handling(self):
@@ -438,7 +468,8 @@ class CredMaster(object):
 				t.join()
 
 
-			notify.notify_update(f"Info: Spray complete.", self.notify_obj, self.proxy_notify)
+			if "update" in self.notify_events:
+				notify.notify_update(f"Info: Spray complete.", self.notify_obj, self.proxy_notify)
 
 			self.console_logger.info(f"Valid credentials discovered: {len(self.results)}")
 			for success in self.results:
@@ -674,7 +705,8 @@ class CredMaster(object):
 						if self.trim:
 							self.creds_pool.trim_user(cred["username"])
 						self.results.append( {"username" : cred["username"], "password" : cred["password"]} )
-						notify.notify_success(cred["username"], cred["password"], self.notify_obj, self.proxy_notify)
+						if "success" in self.notify_events:
+							notify.notify_success(cred["username"], cred["password"], self.notify_obj, self.proxy_notify)
 						self.success_logger.info(f'{cred["username"]}:{cred["password"]}')
 
 					if response["valid_user"] or result == "success":
@@ -772,6 +804,7 @@ if __name__ == '__main__':
 	notify_args.add_argument('--keybase_webhook', type=str, default=None, help='Webhook for Keybase notifications')
 	notify_args.add_argument('--operator_id', type=str, default=None, help='Optional Operator ID for notifications')
 	notify_args.add_argument('--exclude_password', default=False, action="store_true", help='Exclude discovered password in Notification message')
+	notify_args.add_argument('--notify_on', type=str, default=None, help='Comma separated notification events to enable (success,update). Use none to disable all.')
 
 	fp_args = parser.add_argument_group(title='Fireprox Connection Inputs')
 	fp_args.add_argument('--no-fireprox', default=False, action="store_true", required=False, help="Disables IP rotation through Fireprox (no AWS credentials needed)")
