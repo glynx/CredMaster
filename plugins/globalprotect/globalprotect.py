@@ -1,3 +1,4 @@
+import re
 import requests
 from urllib.parse import urlparse
 import utils.utils as utils
@@ -66,6 +67,12 @@ def globalprotect_authenticate(target_url, username, password, useragent, plugin
     try:
         # Use a Session to mimic persistent client behavior (cookies, etc.)
         with requests.Session() as s:
+            # issue a pre request to get a session id and csrf token
+            pre_req_resp = s.get(base,verify=False,proxies=proxies, timeout=15, allow_redirects=True)
+            csrf_token = re.search(r'(?:csrf-token"\s*value=")([^"]*)', pre_req_resp.text, re.MULTILINE)
+            if csrf_token:
+                post_params['csrf-token'] = csrf_token.group(1)
+
             s.verify = False  # intentionally disabled for pen-test parity
             resp = s.post(post_url, headers=headers, data=post_params, verify=False,
                           proxies=proxies, timeout=15, allow_redirects=True)
@@ -88,6 +95,7 @@ def globalprotect_authenticate(target_url, username, password, useragent, plugin
 
         # Header-based GlobalProtect check — this is the most reliable indicator observed
         gp_hdr = resp.headers.get("x-private-pan-globalprotect")
+        
         if gp_hdr is not None:
             gp_val = gp_hdr.strip().lower()
             # If header is present and NOT one of the known failure tokens -> success
