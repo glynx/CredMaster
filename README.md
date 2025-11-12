@@ -67,6 +67,10 @@ The following plugins are currently supported:
   * `--plugin okta`
 * [FortinetVPN](https://github.com/knavesec/CredMaster/wiki/FortinetVPN) - Fortinet VPN Client
   * `--plugin fortinetvpn`
+* Paloalto Global Protect VPN
+  * `--plugin globalprotect`
+* CiscoVPN - Cisco AnyConnect or Web VPN
+  * `--plugin ciscovpn` - Untested 
 * [HTTPBrute](https://github.com/knavesec/CredMaster/wiki/HTTPBrute) - Generic HTTP Brute Methods (Basic/Digest/NTLM)
   * `--plugin httpbrute`
 * [GMailEnum](https://github.com/knavesec/CredMaster/wiki/GmailEnum) - GSuite/Gmail enumeration
