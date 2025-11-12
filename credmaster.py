@@ -329,7 +329,7 @@ class CredMaster(object):
 		pluginargs['thread_count'] = self.thread_count
 
 		self.start_time = datetime.datetime.now(datetime.timezone.utc)
-		self.console_logger.info(f"Execution started at: {self.start_time}")
+		self.console_logger.info(f"Execution started at: {self.format_local_time(self.start_time)}")
 
 		# Check with plugin to make sure it has the data that it needs
 		if self.plugin is None:
@@ -502,6 +502,10 @@ class CredMaster(object):
 		# Print stats
 		self.display_stats(False)
 
+	def format_local_time(self, dt):
+		local_dt = dt.astimezone()
+		tz_name = local_dt.tzname() or "local"
+		return f"{local_dt} {tz_name}"
 
 	def load_apis(self, url, region=None):
 
@@ -567,7 +571,7 @@ class CredMaster(object):
 				self.console_logger.info(f"Let's go without fireprox")
 
 		if self.end_time and not start:
-			self.console_logger.info(f"End Time: {self.end_time}")
+			self.console_logger.info(f"End Time: {self.format_local_time(self.end_time)}")
 			self.console_logger.info(f"Total Execution: {self.time_lapse} seconds")
 
 			if self.userenum:
@@ -591,10 +595,11 @@ class CredMaster(object):
 			duration = datetime.datetime.now(datetime.UTC) - self.start_time
 			if percentage > 0:
 				eta = self.start_time + (1/percentage)*duration
+				eta_display = self.format_local_time(eta)
 			else:
-				eta = "+inf"
+				eta_display = "+inf"
 			log_string = f'{self.creds_pool.attempts_count} / {self.creds_pool.attempts_total - self.creds_pool.attempts_trimmed} '
-			log_string += f'({round(100*percentage, 3)}%) ({self.creds_pool.attempts_trimmed} trimmed) - {duration} elapsed, ETA {eta} (UTC)'
+			log_string += f'({round(100*percentage, 3)}%) ({self.creds_pool.attempts_trimmed} trimmed) - {duration} elapsed, ETA {eta_display}'
 			self.progress_logger.info(log_string)
 		except:
 			self.progress_logger.error("Error when trying to compute progress")
